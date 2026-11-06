@@ -1,0 +1,28 @@
+# M5 Core2 heartbeat listener. Runs on the Debian TinyPC next to the Zabbix proxy.
+# Needs a .env file (copy .env.example): M5CORE2_TOKEN and BIND_IP.
+services:
+  m5core2-heartbeat:
+    build: .
+    image: m5core2-heartbeat:1
+    container_name: m5core2-heartbeat
+    user: "1000:1000"            # jkozik, so ./state is writable and owned by the project owner
+    env_file: .env
+    environment:
+      PORT: "9099"
+      STATE_DIR: /state
+    ports:
+      - "${BIND_IP}:9099:9099/udp"   # LAN address only
+    volumes:
+      - ./state:/state
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 32m
+    pids_limit: 16
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "3"
+    restart: unless-stopped
