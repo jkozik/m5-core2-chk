@@ -18,8 +18,10 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-    mem_limit: 32m
-    pids_limit: 16
+    mem_limit: 32m               # observed ~7 MiB, also during a 100,000 datagram/s flood
+    memswap_limit: 32m           # same as mem_limit = no swap
+    cpus: "0.25"                 # idle 0%; a flood would otherwise pin a full core
+    pids_limit: 16               # observed 1
     logging:
       driver: json-file
       options:

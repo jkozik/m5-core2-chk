@@ -103,6 +103,26 @@ Added so that `docker ps` shows whether the listener is cycling, for whoever com
 - Docker only reports `unhealthy`; it does not restart the container (`restart: unless-stopped` acts on exits only).
   Zabbix could watch it with `docker inspect -f '{{.State.Health.Status}}' m5core2-heartbeat` if wanted.
 
+## Resource limits (set 2026-11-06)
+
+Measured, then set with headroom (in `docker-compose.yml`):
+
+| Limit | Value | Measured |
+|---|---|---|
+| `mem_limit` | 32m | 7.1 MiB idle, 7.4 MiB peak during a flood |
+| `memswap_limit` | 32m (no swap) | Docker's default would have allowed another 32 MiB of swap |
+| `cpus` | 0.25 | 0% idle; the flood below used about one full core before the cap |
+| `pids_limit` | 16 | 1 |
+
+- Burst test, run on osprey itself so it never touched the LAN: 200,000 junk and wrong-token datagrams in about 2 s
+  (~100,000/s). Without a CPU cap the listener used ~97% of a core. With `cpus: 0.25` it used 25%. Memory stayed under
+  7.5 MiB, health stayed `healthy`, no restarts or OOM kills, and the real Core2 heartbeat kept arriving.
+- A flood can still make the kernel drop datagrams once the socket buffer fills, including a real heartbeat. That is
+  acceptable: the Core2 sends each heartbeat twice and the stale threshold tolerates a missed one.
+- Swap limits work on osprey (cgroup v2); `docker inspect` shows `swap` equal to `mem` after the change. If a future
+  host lacks swap accounting, Docker warns and ignores `memswap_limit`.
+- Reproduce: a short Python loop sending junk UDP to the host's `BIND_IP` port 9099 while watching `docker stats`.
+
 ## Gotchas
 
 - The Core2 only sends while on Ghorman, so a Ghorman outage also silences the heartbeat. The "Core2 not reporting"
@@ -113,8 +133,7 @@ Added so that `docker ps` shows whether the listener is cycling, for whoever com
 
 ## Status and ideas
 
-Running since 2026-11-01; all items verified. Health check added 2026-11-06. Left to sit and observe.
+Running since 2026-11-01; all items verified. Health check and resource limits added 2026-11-06. Left to sit and observe.
 
 Possible later work:
-- Tighter resource limits (e.g. `cpus: 0.25`, memory reservation near the observed ~7 MiB).
 - A live failover test with Ghorman unplugged.

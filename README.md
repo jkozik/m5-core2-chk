@@ -88,6 +88,7 @@ Docker does not restart an unhealthy container by itself; it only reports it.
 
 - Datagrams without the right token are dropped (logged at most once a minute). The token is not encryption: this is
   meant for a trusted LAN, and the port is published on the LAN address only.
-- Container: non-root, read-only filesystem, all capabilities dropped, `no-new-privileges`, 32 MB memory cap, 16 process
-  cap. Typical use is about 7 MiB and near-zero CPU.
+- Container: non-root, read-only filesystem, all capabilities dropped, `no-new-privileges`, 32 MB memory cap (no swap),
+  a quarter of one CPU core, 16 process cap. Typical use is about 7 MiB and near-zero CPU; the limits leave generous
+  headroom, and the CPU cap keeps a UDP flood from starving other services on the host.
 - Only `.env` holds a secret, and it is git-ignored.
