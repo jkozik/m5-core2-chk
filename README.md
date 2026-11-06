@@ -58,6 +58,7 @@ missed heartbeat.
 ## Check it
 
 ```
+docker ps                                     # STATUS should say (healthy)
 docker logs m5core2-heartbeat                 # "heartbeat from <core2 ip>: {...}"
 ./m5core2_check.sh age                        # seconds since last heartbeat
 ./m5core2_check.sh health                     # 1 or 0
@@ -74,7 +75,14 @@ zabbix_agentd -t 'm5core2.health[420]'        # what the agent will report
 | `m5core2_check.sh` | What the agent runs: `age`, `health [max]`, `field NAME` |
 | `m5core2.conf` | The `UserParameter` lines |
 | `.env.example` | Template for `.env` (token and bind address; `.env` is not committed) |
-| `state/` | Runtime data (not committed) |
+| `state/` | Runtime data (not committed): `last_seen` (the Core2's last heartbeat) and `alive` (the listener's own pulse) |
+
+## Health check
+
+`docker ps` shows `(healthy)` while the listener loop is running. The listener touches `state/alive` every 30 s, even when
+the Core2 is silent, and Docker marks the container unhealthy if that file is more than 90 s old (checked every 60 s,
+three strikes). This is about the container; whether the Core2 is reporting is the Zabbix `m5core2.health[420]` item.
+Docker does not restart an unhealthy container by itself; it only reports it.
 
 ## Security and footprint
 

@@ -6,6 +6,7 @@ Receives one datagram per Core2 test cycle, e.g.
 (g/n/t = Ghorman/Naboo/T-Mobile verdict: 0 green, 1 yellow, 2 red; up = uptime in seconds)
 and, if the token matches and the fields are valid, atomically rewrites STATE_DIR/last_seen.
 The file's modification time is the "last heartbeat" time; the Zabbix agent reads it on the host.
+The loop also touches STATE_DIR/alive every few seconds, which the Docker health check watches.
 Standard library only.
 """
 import hmac
@@ -21,6 +22,7 @@ TOKEN = os.environ.get("M5CORE2_TOKEN", "")
 FIELDS = ("up", "g", "n", "t", "bat")
 MAX_LEN = 256            # datagrams longer than this are ignored
 LOG_REJECT_EVERY = 60    # seconds; keeps scanners from filling the log
+ALIVE_EVERY = 30         # seconds; also the recvfrom timeout, so the loop wakes when idle
 
 
 def parse(data):
@@ -58,17 +60,34 @@ def write_state(fields):
     os.replace(tmp, os.path.join(STATE_DIR, "last_seen"))
 
 
+def touch_alive():
+    """Prove the loop is running (and STATE_DIR is writable) for the container health check."""
+    try:
+        path = os.path.join(STATE_DIR, "alive")
+        with open(path, "a"):
+            os.utime(path)
+    except OSError as exc:
+        print(f"cannot touch alive file: {exc}", flush=True)
+
+
 def main():
     if not TOKEN:
         sys.exit("M5CORE2_TOKEN is not set; refusing to run without a token")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((BIND, PORT))
+    sock.settimeout(ALIVE_EVERY)
     print(f"listening on {BIND}:{PORT}/udp, state in {STATE_DIR}", flush=True)
     rejected = 0
     last_reject_log = 0.0
+    last_alive = 0.0
     while True:
+        if time.monotonic() - last_alive >= ALIVE_EVERY:
+            touch_alive()
+            last_alive = time.monotonic()
         try:
             data, addr = sock.recvfrom(MAX_LEN + 1)
+        except socket.timeout:  # idle; go round again so the alive file stays fresh
+            continue
         except OSError:  # e.g. Windows raises on an oversize datagram (Linux truncates); treat as junk
             data, addr = b"", ("?",)
             time.sleep(0.1)

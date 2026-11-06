@@ -89,6 +89,20 @@ Triggers: `health[420]=0` (Core2 not reporting), `field[g]=2` (Ghorman down), `f
 - **Debug "Core2 silent":** `docker logs m5core2-heartbeat` (is it receiving?), `./m5core2_check.sh age`, Core2 serial
   output for `[heartbeat] sent|FAILED`, and confirm the Core2 reached Ghorman that cycle.
 
+## Container health check (added 2026-11-06)
+
+Added so that `docker ps` shows whether the listener is cycling, for whoever comes back to this later.
+
+- Why not just check the port? A port check passes even if the loop is wedged. Instead the loop touches `state/alive`
+  every 30 s (the `recvfrom` timeout is 30 s so it wakes when idle) and the check fails if the file is over 90 s old.
+  This also fails if `state/` becomes unwritable, which would break heartbeat recording anyway.
+- The check runs `python -c` inside the container (no curl or wget in the image): interval 60 s, timeout 5 s,
+  3 retries, 30 s start period. Verified: healthy 20 s after start, still healthy after 100 s, fails on a stale or
+  missing file. Memory stayed about 7 MiB.
+- Kept separate from the Zabbix alert on purpose: container health = listener alive, `health[420]` = Core2 alive.
+- Docker only reports `unhealthy`; it does not restart the container (`restart: unless-stopped` acts on exits only).
+  Zabbix could watch it with `docker inspect -f '{{.State.Health.Status}}' m5core2-heartbeat` if wanted.
+
 ## Gotchas
 
 - The Core2 only sends while on Ghorman, so a Ghorman outage also silences the heartbeat. The "Core2 not reporting"
@@ -99,9 +113,8 @@ Triggers: `health[420]=0` (Core2 not reporting), `field[g]=2` (Ghorman down), `f
 
 ## Status and ideas
 
-Running since 2026-11-01; all items verified. Left to sit and observe.
+Running since 2026-11-01; all items verified. Health check added 2026-11-06. Left to sit and observe.
 
 Possible later work:
-- A container health check (the listener touches an alive file; Docker checks its age).
 - Tighter resource limits (e.g. `cpus: 0.25`, memory reservation near the observed ~7 MiB).
 - A live failover test with Ghorman unplugged.
