@@ -11,8 +11,8 @@ reach one LAN address.
 Core2 --UDP 9099--> container --writes--> state/last_seen <--reads-- m5core2_check.sh <-- zabbix agent <-- Zabbix
 ```
 
-This is the receiving half. The Core2 firmware lives in the companion repository (the sender is `sendHeartbeat()` in
-its `src/main.cpp`).
+This is the receiving half. The Core2 firmware lives in the companion repository
+[Core2](https://github.com/jkozik/Core2) (the sender is `sendHeartbeat()` in its `src/main.cpp`).
 
 ## What you get
 
